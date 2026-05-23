@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
+
+    // Insert completion
     const { data, error } = await admin
       .from("sop_completions")
       .insert({
@@ -32,6 +34,23 @@ export async function POST(request: NextRequest) {
       .select("*, user:users(id, full_name)")
       .single();
     if (error) return NextResponse.json({ error: "Failed to start checklist" }, { status: 500 });
+
+    // Auto-create completion items from template items
+    const { data: templateItems } = await admin
+      .from("sop_checklist_items")
+      .select("id")
+      .eq("template_id", body.template_id)
+      .order("order_index", { ascending: true });
+
+    if (templateItems && templateItems.length > 0) {
+      const itemsPayload = templateItems.map((item: any) => ({
+        completion_id: data.id,
+        checklist_item_id: item.id,
+        is_checked: false,
+      }));
+      await admin.from("sop_completion_items").insert(itemsPayload);
+    }
+
     return NextResponse.json({ success: true, completion: data }, { status: 201 });
   } catch (error) {
     console.error("[saas-mobile-server] checklist completions POST error:", error);

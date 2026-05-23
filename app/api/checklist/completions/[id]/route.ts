@@ -17,18 +17,49 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { data, error } = await admin
-      .from("sop_completions")
-      .update({
-        status: body.status,
-        completed_at: body.completed_at,
-        is_late: body.is_late,
-      })
-      .eq("id", id)
-      .select("*, user:users(id, full_name)")
-      .single();
-    if (error) return NextResponse.json({ error: "Failed to update checklist completion" }, { status: 500 });
-    return NextResponse.json({ success: true, completion: data });
+    // Update completion main record
+    const updatePayload: Record<string, any> = {};
+    if (body.status !== undefined) updatePayload.status = body.status;
+    if (body.completed_at !== undefined) updatePayload.completed_at = body.completed_at;
+    if (body.is_late !== undefined) updatePayload.is_late = body.is_late;
+    if (body.notes !== undefined) updatePayload.notes = body.notes;
+
+    let completionData = existing;
+    if (Object.keys(updatePayload).length > 0) {
+      const { data, error } = await admin
+        .from("sop_completions")
+        .update(updatePayload)
+        .eq("id", id)
+        .select("*, user:users(id, full_name)")
+        .single();
+      if (error) return NextResponse.json({ error: "Failed to update checklist completion" }, { status: 500 });
+      completionData = data;
+    }
+
+    // Update completion item if provided
+    if (body.item) {
+      const itemUpdate: Record<string, any> = {};
+      if (body.item.is_checked !== undefined) itemUpdate.is_checked = body.item.is_checked;
+      if (body.item.comment !== undefined) itemUpdate.comment = body.item.comment;
+      if (body.item.value !== undefined) itemUpdate.value = body.item.value;
+      if (body.item.photo_url !== undefined) itemUpdate.photo_url = body.item.photo_url;
+      if (body.item.video_url !== undefined) itemUpdate.video_url = body.item.video_url;
+      if (body.item.checked_at !== undefined) itemUpdate.checked_at = body.item.checked_at;
+      if (body.item.checked_by !== undefined) itemUpdate.checked_by = body.item.checked_by;
+
+      if (Object.keys(itemUpdate).length > 0) {
+        const { error: itemError } = await admin
+          .from("sop_completion_items")
+          .update(itemUpdate)
+          .eq("id", body.item.completionItemId)
+          .eq("completion_id", id);
+        if (itemError) {
+          console.error("[saas-mobile-server] completion item update error:", itemError);
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true, completion: completionData });
   } catch (error) {
     console.error("[saas-mobile-server] checklist completion PATCH error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
