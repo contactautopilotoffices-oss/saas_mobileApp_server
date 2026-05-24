@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 
-function getTodayRange() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,14 +19,11 @@ export async function GET(request: NextRequest) {
     if (!access.authorized) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const admin = createAdminClient();
-    const { start, end } = getTodayRange();
 
     let query = admin
       .from("visitor_logs")
       .select("*")
       .eq("property_id", propertyId)
-      .gte("checkin_time", start)
-      .lte("checkin_time", end)
       .order("checkin_time", { ascending: false });
 
     if (status && status !== "all") query = query.eq("status", status);
