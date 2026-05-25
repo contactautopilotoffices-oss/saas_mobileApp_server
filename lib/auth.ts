@@ -118,6 +118,11 @@ export async function getPropertyAccess(userId: string, propertyId: string) {
         return { authorized: true, role: "super_tenant" };
       }
     }
+
+    // Any active org member can read property-scoped data (mirrors web app RLS)
+    if (orgMembership) {
+      return { authorized: true, role: orgMembership.role };
+    }
   }
 
   // 3. Property-level membership (any active role)
