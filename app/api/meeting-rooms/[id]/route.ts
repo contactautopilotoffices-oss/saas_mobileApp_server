@@ -1,7 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { canManageProperty } from "@/lib/authorization";
+
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  try {
+    const auth = await getAuthenticatedUser(request);
+    if (auth.response || !auth.user) {
+      return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await context.params;
+    if (!id) {
+      return NextResponse.json({ error: "Missing room id" }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { data: room, error } = await admin
+      .from("meeting_rooms")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !room) {
+      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+    }
+
+    const access = await getPropertyAccess(auth.user.id, room.property_id);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    return NextResponse.json({ room });
+  } catch (error) {
+    console.error("[saas-mobile-server] meeting-rooms/[id] GET error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
