@@ -63,6 +63,39 @@ export async function getAuthorizedSupabase(request: NextRequest) {
   };
 }
 
+/**
+ * Try to extract a property-scoping identifier from a generic query body.
+ * Most property-scoped tables use `property_id`; the `properties` table itself
+ * uses `id` when fetching a single property.
+ */
+export function extractPropertyIdFromQuery(body: QueryRequestBody): string | null {
+  if (!body.filters) return null;
+
+  // Standard property-scoped tables
+  const propFilter = body.filters.find(
+    (f) => f.op === "eq" && f.column === "property_id" && typeof f.value === "string"
+  );
+  if (propFilter) return propFilter.value as string;
+
+  // Properties table queried by id
+  if (body.table === "properties") {
+    const idFilter = body.filters.find(
+      (f) => f.op === "eq" && f.column === "id" && typeof f.value === "string"
+    );
+    if (idFilter) return idFilter.value as string;
+  }
+
+  return null;
+}
+
+/**
+ * Extract property_id from RPC params (common naming conventions).
+ */
+export function extractPropertyIdFromRpc(params: Record<string, unknown>): string | null {
+  const val = params.p_property_id ?? params.property_id ?? params.prop_id;
+  return typeof val === "string" ? val : null;
+}
+
 export function applyQueryFilters(query: any, filters: QueryFilter[] = []) {
   let nextQuery = query;
 

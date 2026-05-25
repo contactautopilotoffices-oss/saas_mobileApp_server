@@ -47,17 +47,22 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<{
   };
 }
 
-// ── Role Constants (aligned with saas_one web app) ─────────────────────────
+// ── Role Constants (aligned with app_role enum + saas_one web app) ─────────
+// NOTE: The DB enum app_role only contains: master_admin, org_super_admin,
+// property_admin, staff, tenant, food_vendor, mst, security, vendor,
+// soft_service_staff, soft_service_supervisor, soft_service_manager,
+// super_tenant, maintenance_vendor, procurement.
+// The web app TypeScript types also reference org_admin / owner, but these
+// do NOT exist in the current DB enum.
 
 /** Org-level admin roles that have access to ALL properties in the org */
-const ORG_ADMIN_ROLES = new Set(["org_admin", "org_super_admin", "owner", "admin"]);
+const ORG_ADMIN_ROLES = new Set(["org_super_admin"]);
 
 /** Property-level roles that grant scoped access to a specific property */
 const PROPERTY_ROLES = new Set([
   "property_admin", "staff", "mst", "tenant", "security",
   "soft_service_manager", "soft_service_staff", "soft_service_supervisor",
-  "hk", "fe", "se", "technician", "field_staff", "bms_operator",
-  "vendor", "maintenance_vendor"
+  "food_vendor", "vendor", "maintenance_vendor", "procurement"
 ]);
 
 // ── Property Access (read gate) ────────────────────────────────────────────

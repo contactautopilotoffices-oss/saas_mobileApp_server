@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthorizedSupabase } from "@/lib/mobileClient";
+import { getAuthorizedSupabase, extractPropertyIdFromRpc } from "@/lib/mobileClient";
+import { getPropertyAccess } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 
+/**
+ * RPC proxy: uses admin client (service role) to bypass RLS and enforces
+ * property scoping manually via getPropertyAccess() when a property_id is
+ * present in the RPC parameters. This mirrors how the web app's API routes
+ * handle server-side data access.
+ */
 export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthorizedSupabase(request);
-    if (auth.response || !auth.client) {
+    if (auth.response || !auth.client || !auth.user) {
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -16,7 +24,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "functionName is required" }, { status: 400 });
     }
 
-    const result = await auth.client.rpc(functionName, params);
+    // Enforce property scoping when a property_id is present in RPC params
+    const propertyId = extractPropertyIdFromRpc(params);
+    if (propertyId) {
+      const access = await getPropertyAccess(auth.user.id, propertyId);
+      if (!access.authorized) {
+        return NextResponse.json(
+          { error: "Forbidden: you do not have access to this property" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Use admin client to bypass RLS (auth already verified above)
+    const adminClient = createAdminClient();
+    const result = await adminClient.rpc(functionName, params);
 
     return NextResponse.json({
       data: result.data ?? null,
