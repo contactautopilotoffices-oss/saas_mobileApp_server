@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const propertyId = request.nextUrl.searchParams.get("propertyId");
+    const organizationId = request.nextUrl.searchParams.get("organizationId");
     if (!propertyId) return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
 
     const access = await getPropertyAccess(auth.user.id, propertyId);
@@ -16,23 +17,35 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
     
-    // Fetch PPM schedules
-    const { data: schedules, error: schedulesError } = await admin
+    // Fetch PPM schedules — align with saas_one web app logic
+    let scheduleQuery = admin
       .from("ppm_schedules")
-      .select("*, maintenance_vendors(id, company_name, contact_person, phone)")
-      .eq("property_id", propertyId)
-      .order("planned_date");
+      .select("*, maintenance_vendors(id, company_name, contact_person, phone, is_active)")
+      .eq("property_id", propertyId);
+    
+    if (organizationId) scheduleQuery = scheduleQuery.eq("organization_id", organizationId);
+    
+    const { data: schedules, error: schedulesError } = await scheduleQuery.order("planned_date", { ascending: true });
 
-    if (schedulesError) throw schedulesError;
+    if (schedulesError) {
+      console.error("[saas-mobile-server] ppm GET schedules error:", schedulesError);
+      return NextResponse.json({ error: schedulesError.message, details: schedulesError.details, hint: schedulesError.hint }, { status: 500 });
+    }
 
     // Fetch AMC contracts
-    const { data: contracts, error: contractsError } = await admin
+    let contractQuery = admin
       .from("amc_contracts")
       .select("*")
-      .eq("property_id", propertyId)
-      .order("end_date");
+      .eq("property_id", propertyId);
+    
+    if (organizationId) contractQuery = contractQuery.eq("organization_id", organizationId);
+    
+    const { data: contracts, error: contractsError } = await contractQuery.order("contract_end_date", { ascending: true });
 
-    if (contractsError) throw contractsError;
+    if (contractsError) {
+      console.error("[saas-mobile-server] ppm GET contracts error:", contractsError);
+      return NextResponse.json({ error: contractsError.message, details: contractsError.details, hint: contractsError.hint }, { status: 500 });
+    }
 
     return NextResponse.json({ schedules: schedules ?? [], contracts: contracts ?? [] });
   } catch (error) {

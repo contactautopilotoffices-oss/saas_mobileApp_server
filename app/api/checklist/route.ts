@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 
+const ADMIN_ROLES = ["property_admin", "org_admin", "org_super_admin", "master_admin"];
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await getAuthenticatedUser(request);
@@ -38,8 +40,24 @@ export async function GET(request: NextRequest) {
       }))
       .filter((m: any) => m.id);
 
+    // Determine if this user is an admin for this property
+    const userMembership = (members ?? []).find((m: any) => (m.users?.id || m.user_id) === auth.user!.id);
+    const userRole = userMembership?.role?.toLowerCase() ?? "";
+    const isAdmin = ADMIN_ROLES.includes(userRole);
+
+    // Filter templates: admins see all; others only see templates where
+    // assigned_to is empty (open to all) OR their user ID is included.
+    // This matches the web app behavior in SOPTemplateManager & SOPCompletionHistory.
+    const userId = auth.user.id;
+    const filteredTemplates = isAdmin
+      ? (templates ?? [])
+      : (templates ?? []).filter((t: any) => {
+          const assignedTo: string[] = t.assigned_to ?? [];
+          return assignedTo.length === 0 || assignedTo.includes(userId);
+        });
+
     return NextResponse.json({
-      templates: templates ?? [],
+      templates: filteredTemplates,
       propertyMembers,
       organizationId: property?.organization_id ?? null,
     });
@@ -48,3 +66,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
