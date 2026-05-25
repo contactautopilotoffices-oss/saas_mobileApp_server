@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { canManageProperty } from "@/lib/authorization";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -25,21 +25,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ven
 
     if (!vendor) return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
 
-    const { data: membership } = await admin
-      .from("property_members")
-      .select("role")
-      .eq("user_id", auth.user.id)
-      .eq("property_id", vendor.property_id)
-      .maybeSingle();
-
-    if (!membership) {
-      const { data: orgMembership } = await admin
-        .from("organization_members")
-        .select("role")
-        .eq("user_id", auth.user.id)
-        .maybeSingle();
-
-      if (!orgMembership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const access = await getPropertyAccess(auth.user.id, vendor.property_id);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     let query = admin

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { canManageProperty } from "@/lib/authorization";
 
 export async function POST(request: NextRequest) {
@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
     const propertyId = body.propertyId || body.property_id;
     if (!propertyId || !body.template_id) return NextResponse.json({ error: "Missing checklist fields" }, { status: 400 });
     if (!(await canManageProperty(auth.user.id, propertyId))) {
-      const accessAllowed = body.completed_by === auth.user.id;
+      const access = await getPropertyAccess(auth.user.id, propertyId);
+      const accessAllowed = access.authorized && body.completed_by === auth.user.id;
       if (!accessAllowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

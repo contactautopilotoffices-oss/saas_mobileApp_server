@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,6 +13,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const admin = createAdminClient();
     const { data: existing } = await admin.from("sop_completions").select("id, property_id, completed_by").eq("id", id).maybeSingle();
     if (!existing) return NextResponse.json({ error: "Checklist completion not found" }, { status: 404 });
+    const access = await getPropertyAccess(auth.user.id, existing.property_id);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     if (existing.completed_by && existing.completed_by !== auth.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

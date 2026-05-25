@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
-import { canManageProperty } from "@/lib/authorization";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -15,32 +14,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const admin = createAdminClient();
 
-    // Verify ownership
-    const { data: schedule } = await admin
-      .from("ppm_schedules")
-      .select("property_id")
-      .eq("id", scheduleId)
-      .single();
-
-    if (!schedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
-
-    // Since users may just be staff updating attachments, we allow users with property access
-    const { data: membership } = await admin
-      .from("property_members")
-      .select("role")
-      .eq("user_id", auth.user.id)
-      .eq("property_id", schedule.property_id)
-      .maybeSingle();
-      
-    if (!membership) {
-      const { data: orgMembership } = await admin
-        .from("organization_members")
-        .select("role")
-        .eq("user_id", auth.user.id)
-        .maybeSingle(); // Assumes they are part of the right org since they are logged in and reached here, but canManageProperty is more strict.
-        
-      if (!orgMembership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const { data: schedule } = await admin.from("ppm_schedules").select("property_id").eq("id", scheduleId).maybeSingle();
+    if (!schedule) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const access = await getPropertyAccess(auth.user.id, schedule.property_id);
+    if (!access.authorized) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { data, error } = await admin
       .from("ppm_schedules")

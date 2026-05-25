@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { canManageOrganization, canManageProperty } from "@/lib/authorization";
+import { canManageOrganization, canManageProperty, getUserProfile, getPropertyOrganizationId } from "@/lib/authorization";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 interface UpdateRoleRequest {
@@ -29,12 +29,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields: userId, newRole" }, { status: 400 });
     }
 
-    const canManage =
-      (propertyId ? await canManageProperty(auth.user.id, propertyId) : false) ||
-      (organizationId ? await canManageOrganization(auth.user.id, organizationId) : false);
+    const callerProfile = await getUserProfile(auth.user.id);
+    const isMasterAdmin = !!callerProfile?.is_master_admin;
 
-    if (!canManage) {
+    let authorized = false;
+    if (isMasterAdmin) {
+      authorized = true;
+    } else if (propertyId) {
+      const canManageProp = await canManageProperty(auth.user.id, propertyId);
+      if (organizationId) {
+        authorized = canManageProp && await canManageOrganization(auth.user.id, organizationId);
+      } else {
+        authorized = canManageProp;
+      }
+    } else if (organizationId) {
+      authorized = await canManageOrganization(auth.user.id, organizationId);
+    }
+
+    if (!authorized) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const AUTH_ORG_LEVEL_ROLES = new Set(["org_super_admin", "org_admin", "owner", "admin"]);
+    if (AUTH_ORG_LEVEL_ROLES.has(newRole)) {
+      let canAssignOrgRole = isMasterAdmin;
+      if (!canAssignOrgRole && organizationId) {
+        canAssignOrgRole = await canManageOrganization(auth.user.id, organizationId);
+      }
+      if (!canAssignOrgRole && propertyId) {
+        const propOrgId = await getPropertyOrganizationId(propertyId);
+        if (propOrgId) {
+          canAssignOrgRole = await canManageOrganization(auth.user.id, propOrgId);
+        }
+      }
+      if (!canAssignOrgRole) {
+        return NextResponse.json(
+          { error: "Forbidden: insufficient privileges to assign org-level role" },
+          { status: 403 }
+        );
+      }
     }
 
     const admin = createAdminClient();

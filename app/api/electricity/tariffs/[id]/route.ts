@@ -10,15 +10,17 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;
-    const propertyId = request.nextUrl.searchParams.get("propertyId");
-    if (!propertyId) return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
+    const admin = createAdminClient();
+    const { data: tariff } = await admin.from("grid_tariffs").select("property_id").eq("id", id).maybeSingle();
+    const propertyId = tariff?.property_id ?? null;
+    if (!propertyId) return NextResponse.json({ error: "Tariff not found" }, { status: 404 });
     if (!(await canManageProperty(auth.user.id, propertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const admin = createAdminClient();
     await admin
       .from("electricity_readings")
       .update({ tariff_id: null, tariff_rate_used: null, computed_cost: 0 })
-      .eq("tariff_id", id);
+      .eq("tariff_id", id)
+      .eq("property_id", propertyId);
 
     const { error } = await admin.from("grid_tariffs").delete().eq("id", id).eq("property_id", propertyId);
     if (error) return NextResponse.json({ error: "Failed to delete tariff" }, { status: 500 });

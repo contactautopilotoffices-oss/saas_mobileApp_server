@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: NextRequest) {
@@ -17,6 +17,11 @@ export async function GET(request: NextRequest) {
 
     if (!propertyId || (!month && (!startDateParam || !endDateParam))) {
       return NextResponse.json({ error: "propertyId and either month or startDate+endDate are required" }, { status: 400 });
+    }
+
+    const access = await getPropertyAccess(auth.user.id, propertyId);
+    if (!access) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const admin = createAdminClient();

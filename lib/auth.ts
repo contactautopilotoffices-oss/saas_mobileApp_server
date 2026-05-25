@@ -47,9 +47,27 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<{
   };
 }
 
+// ── Role Constants (aligned with saas_one web app) ─────────────────────────
+
+/** Org-level admin roles that have access to ALL properties in the org */
+const ORG_ADMIN_ROLES = new Set(["org_admin", "org_super_admin", "owner", "admin"]);
+
+/** Property-level roles that grant scoped access to a specific property */
+const PROPERTY_ROLES = new Set([
+  "property_admin", "staff", "mst", "tenant", "security",
+  "soft_service_manager", "soft_service_staff", "soft_service_supervisor",
+  "hk", "fe", "se", "technician", "field_staff", "bms_operator",
+  "vendor", "maintenance_vendor"
+]);
+
+// ── Property Access (read gate) ────────────────────────────────────────────
+// Mirrors saas_one web app property-access logic + super_tenant portfolio check.
+// Any user that can READ property data passes this gate.
+
 export async function getPropertyAccess(userId: string, propertyId: string) {
   const admin = createAdminClient();
 
+  // 1. Master admin bypass
   const { data: userProfile } = await admin
     .from("users")
     .select("is_master_admin")
@@ -60,6 +78,7 @@ export async function getPropertyAccess(userId: string, propertyId: string) {
     return { authorized: true, role: "master_admin" };
   }
 
+  // 2. Org-level admin / procurement / super_tenant check
   const { data: property } = await admin
     .from("properties")
     .select("organization_id")
@@ -75,11 +94,28 @@ export async function getPropertyAccess(userId: string, propertyId: string) {
       .eq("is_active", true)
       .maybeSingle();
 
-    if (orgMembership && ["org_admin", "org_super_admin", "owner", "super_tenant"].includes(orgMembership.role)) {
+    // Org admins get access to ALL properties in the org
+    if (orgMembership && ORG_ADMIN_ROLES.has(orgMembership.role)) {
       return { authorized: true, role: orgMembership.role };
+    }
+
+    // Super tenant: must have property in their portfolio
+    if (orgMembership?.role === "super_tenant") {
+      const { data: stProp } = await admin
+        .from("super_tenant_properties")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("property_id", propertyId)
+        .eq("organization_id", property.organization_id)
+        .maybeSingle();
+
+      if (stProp) {
+        return { authorized: true, role: "super_tenant" };
+      }
     }
   }
 
+  // 3. Property-level membership (any active role)
   const { data: propertyMembership } = await admin
     .from("property_memberships")
     .select("role")

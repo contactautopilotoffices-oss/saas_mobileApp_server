@@ -28,11 +28,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { data, error } = await admin
+    let query = admin
       .from("super_tenant_properties")
       .select("id, property_id, organization_id, assigned_by, created_at, properties(id, name, code, status)")
       .eq("user_id", targetUserId)
       .order("created_at", { ascending: false });
+
+    if (!isMasterAdmin) {
+      const { data: callerOrgs } = await admin
+        .from("organization_memberships")
+        .select("organization_id")
+        .eq("user_id", callerId)
+        .eq("is_active", true);
+
+      const orgIds = callerOrgs?.map((o: any) => o.organization_id) ?? [];
+      if (orgIds.length === 0) {
+        return NextResponse.json({ properties: [] });
+      }
+      query = query.in("organization_id", orgIds);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -73,6 +89,17 @@ export async function POST(request: NextRequest) {
     const { data: targetUser } = await admin.from("users").select("id, full_name, email").eq("id", userId).maybeSingle();
     if (!targetUser) {
       return NextResponse.json({ error: "Target user not found" }, { status: 404 });
+    }
+
+    const uniquePropertyIds = [...new Set(propertyIds)];
+    const { data: validProperties } = await admin
+      .from("properties")
+      .select("id")
+      .in("id", uniquePropertyIds)
+      .eq("organization_id", organizationId);
+
+    if (!validProperties || validProperties.length !== uniquePropertyIds.length) {
+      return NextResponse.json({ error: "One or more properties do not belong to the specified organization" }, { status: 400 });
     }
 
     await admin

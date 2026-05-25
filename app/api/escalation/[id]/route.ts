@@ -17,15 +17,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const { id } = await params;
     const body = await request.json();
-    const propertyId = body.propertyId || body.property_id || (await getHierarchyPropertyId(id));
-    if (!propertyId) return NextResponse.json({ error: "Property not found" }, { status: 404 });
-    if (!(await canManageProperty(auth.user.id, propertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
     const admin = createAdminClient();
+    const { data: hierarchy } = await admin.from("escalation_hierarchies").select("property_id").eq("id", id).maybeSingle();
+    const actualPropertyId = hierarchy?.property_id ?? null;
+    if (!actualPropertyId) return NextResponse.json({ error: "Hierarchy not found" }, { status: 404 });
+    if (!(await canManageProperty(auth.user.id, actualPropertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const { error } = await admin
       .from("escalation_hierarchies")
       .update({ name: body.name, description: body.description ?? null })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("property_id", actualPropertyId);
     if (error) return NextResponse.json({ error: "Failed to update hierarchy" }, { status: 500 });
 
     await admin.from("escalation_levels").delete().eq("hierarchy_id", id);
@@ -62,13 +64,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;
-    const propertyId = request.nextUrl.searchParams.get("propertyId") || (await getHierarchyPropertyId(id));
-    if (!propertyId) return NextResponse.json({ error: "Property not found" }, { status: 404 });
-    if (!(await canManageProperty(auth.user.id, propertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
     const admin = createAdminClient();
+    const { data: hierarchy } = await admin.from("escalation_hierarchies").select("property_id").eq("id", id).maybeSingle();
+    const actualPropertyId = hierarchy?.property_id ?? null;
+    if (!actualPropertyId) return NextResponse.json({ error: "Hierarchy not found" }, { status: 404 });
+    if (!(await canManageProperty(auth.user.id, actualPropertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     await admin.from("escalation_levels").delete().eq("hierarchy_id", id);
-    const { error } = await admin.from("escalation_hierarchies").delete().eq("id", id);
+    const { error } = await admin.from("escalation_hierarchies").delete().eq("id", id).eq("property_id", actualPropertyId);
     if (error) return NextResponse.json({ error: "Failed to delete hierarchy" }, { status: 500 });
     return NextResponse.json({ success: true });
   } catch (error) {

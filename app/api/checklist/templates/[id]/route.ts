@@ -17,20 +17,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const { id } = await params;
     const body = await request.json();
-    const propertyId = body.propertyId || body.property_id || (await getTemplatePropertyId(id));
-    if (!propertyId) return NextResponse.json({ error: "Property not found" }, { status: 404 });
-    if (!(await canManageProperty(auth.user.id, propertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
     const admin = createAdminClient();
+    const { data: template } = await admin.from("sop_templates").select("property_id").eq("id", id).maybeSingle();
+    const actualPropertyId = template?.property_id ?? null;
+    if (!actualPropertyId) return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    if (!(await canManageProperty(auth.user.id, actualPropertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
     const updates: Record<string, any> = {};
     for (const key of ["title", "description", "category", "frequency", "assigned_to", "is_running", "is_active", "start_time", "end_time"]) {
       if (key in body) updates[key] = body[key];
     }
-    const { error } = await admin.from("sop_templates").update(updates).eq("id", id);
+    const { error } = await admin.from("sop_templates").update(updates).eq("id", id).eq("property_id", actualPropertyId);
     if (error) return NextResponse.json({ error: "Failed to update template" }, { status: 500 });
 
     if (Array.isArray(body.items)) {
-      await admin.from("sop_checklist_items").delete().eq("template_id", id);
+      await admin.from("sop_checklist_items").delete().eq("template_id", id).eq("property_id", actualPropertyId);
       if (body.items.length > 0) {
         const rows = body.items.map((item: any) => ({
           template_id: id,

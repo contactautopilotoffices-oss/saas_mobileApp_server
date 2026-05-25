@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +11,16 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
+    const propertyId = (formData.get("propertyId") as string) || "";
+
+    if (!propertyId) {
+      return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
+    }
+
+    const access = await getPropertyAccess(auth.user.id, propertyId);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });

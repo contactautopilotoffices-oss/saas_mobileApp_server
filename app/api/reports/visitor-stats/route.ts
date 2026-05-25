@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
+import { canManageOrganization } from "@/lib/authorization";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: NextRequest) {
@@ -15,6 +16,18 @@ export async function GET(request: NextRequest) {
     
     if (!propertyId && !orgId) {
       return NextResponse.json({ error: "Missing propertyId or orgId" }, { status: 400 });
+    }
+
+    if (propertyId) {
+      const access = await getPropertyAccess(auth.user.id, propertyId);
+      if (!access) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else if (orgId) {
+      const canManage = await canManageOrganization(auth.user.id, orgId);
+      if (!canManage) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const admin = createAdminClient();

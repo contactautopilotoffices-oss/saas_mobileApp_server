@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const ORG_ADMIN_ROLES = new Set(["org_super_admin", "org_admin", "admin", "owner"]);
 const PROPERTY_ADMIN_ROLES = new Set(["property_admin"]);
-const CREDIT_ADMIN_ROLES = new Set(["property_admin", "staff", "org_admin", "org_super_admin", "owner"]);
+const CREDIT_ADMIN_ROLES = new Set(["property_admin", "staff", "security", "org_admin", "org_super_admin", "owner"]);
 
 export async function getUserProfile(userId: string) {
   const admin = createAdminClient();

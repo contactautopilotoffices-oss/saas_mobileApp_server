@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
+import { canManageOrganization } from "@/lib/authorization";
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,6 +31,10 @@ export async function GET(request: NextRequest) {
       }
       const { data: prop } = await admin.from("properties").select("organization_id").eq("id", propertyId).maybeSingle();
       orgId = prop?.organization_id;
+    } else if (organizationId) {
+      if (!(await canManageOrganization(auth.user.id, organizationId))) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     if (!orgId) {

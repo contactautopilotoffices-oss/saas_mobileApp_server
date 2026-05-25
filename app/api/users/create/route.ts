@@ -65,9 +65,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     } else {
-      const canManageOrg = organization_id ? await canManageOrganization(auth.user.id, organization_id) : false;
-      const canManageProp = property_id ? await canManageProperty(auth.user.id, property_id) : false;
-      if (!isCurrentMasterAdmin && !canManageOrg && !canManageProp) {
+      let authorized = false;
+      if (property_id) {
+        const canManageProp = await canManageProperty(auth.user.id, property_id);
+        if (organization_id) {
+          authorized = canManageProp && await canManageOrganization(auth.user.id, organization_id);
+        } else {
+          authorized = canManageProp;
+        }
+      } else if (organization_id) {
+        authorized = await canManageOrganization(auth.user.id, organization_id);
+      }
+      if (!authorized) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }

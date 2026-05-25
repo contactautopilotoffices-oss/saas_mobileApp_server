@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAnonClient } from "@/lib/supabase/client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 
 const BUCKET_NAME = "ticket_photos";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await getAuthenticatedUser(request);
+    if (auth.response || !auth.user) {
+      return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const admin = createAdminClient();
-    const { data: ticket, error } = await admin
+
+    const { data: ticket, error: ticketError } = await admin
       .from("tickets")
-      .select("id, photo_before_url, photo_after_url")
+      .select("id, property_id, photo_before_url, photo_after_url")
       .eq("id", id)
       .maybeSingle();
 
-    if (error || !ticket) {
+    if (ticketError || !ticket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    }
+
+    const access = await getPropertyAccess(auth.user.id, ticket.property_id);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     return NextResponse.json({

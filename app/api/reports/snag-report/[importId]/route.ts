@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(
@@ -23,6 +23,11 @@ export async function GET(
 
     if (importError || !importRecord) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    }
+
+    const access = await getPropertyAccess(auth.user.id, importRecord.property_id);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { data: property } = await admin
@@ -154,6 +159,21 @@ export async function DELETE(
 
     const { importId } = await Promise.resolve(params);
     const admin = createAdminClient();
+
+    const { data: importRecord, error: importError } = await admin
+      .from("snag_imports")
+      .select("property_id")
+      .eq("id", importId)
+      .maybeSingle();
+
+    if (importError || !importRecord) {
+      return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    }
+
+    const access = await getPropertyAccess(auth.user.id, importRecord.property_id);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { error: ticketsDeleteError } = await admin
       .from("tickets")

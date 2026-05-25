@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
       if (!(await canManageOrganization(auth.user.id, organizationId))) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
+    } else {
+      return NextResponse.json({ error: "Missing propertyId or organizationId" }, { status: 400 });
     }
 
     let query = admin

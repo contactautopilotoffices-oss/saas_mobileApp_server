@@ -11,15 +11,40 @@ interface UpdateUserRequest {
   propertyId?: string;
 }
 
-async function canManageTargetUser(
-  actorUserId: string,
-  organizationId?: string | null,
-  propertyId?: string | null
-) {
+async function canManageTargetUser(actorUserId: string, targetUserId: string) {
   const profile = await getUserProfile(actorUserId);
   if (profile?.is_master_admin) return true;
-  if (propertyId && (await canManageProperty(actorUserId, propertyId))) return true;
-  if (organizationId && (await canManageOrganization(actorUserId, organizationId))) return true;
+
+  const admin = createAdminClient();
+
+  const { data: targetOrgMemberships } = await admin
+    .from("organization_memberships")
+    .select("organization_id")
+    .eq("user_id", targetUserId)
+    .eq("is_active", true);
+
+  if (targetOrgMemberships) {
+    for (const membership of targetOrgMemberships) {
+      if (await canManageOrganization(actorUserId, membership.organization_id)) {
+        return true;
+      }
+    }
+  }
+
+  const { data: targetPropMemberships } = await admin
+    .from("property_memberships")
+    .select("property_id")
+    .eq("user_id", targetUserId)
+    .eq("is_active", true);
+
+  if (targetPropMemberships) {
+    for (const membership of targetPropMemberships) {
+      if (await canManageProperty(actorUserId, membership.property_id)) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
@@ -39,10 +64,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     const isSelfUpdate = auth.user.id === id;
-    const canManage = await canManageTargetUser(auth.user.id, organizationId, propertyId);
+    const canManage = await canManageTargetUser(auth.user.id, id);
 
     if (!isSelfUpdate && !canManage) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (!isSelfUpdate && (organizationId || propertyId)) {
+      const canManageScope = organizationId
+        ? await canManageOrganization(auth.user.id, organizationId)
+        : propertyId
+        ? await canManageProperty(auth.user.id, propertyId)
+        : false;
+      if (!canManageScope) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     if (isSelfUpdate && is_active !== undefined) {
@@ -123,7 +159,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     const profile = await getUserProfile(auth.user.id);
-    const canManage = await canManageTargetUser(auth.user.id, organizationId, propertyId);
+    const canManage = await canManageTargetUser(auth.user.id, id);
 
     if (hardDelete) {
       if (!profile?.is_master_admin) {
@@ -131,6 +167,17 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       }
     } else if (!canManage) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (!hardDelete && (organizationId || propertyId)) {
+      const canManageScope = organizationId
+        ? await canManageOrganization(auth.user.id, organizationId)
+        : propertyId
+        ? await canManageProperty(auth.user.id, propertyId)
+        : false;
+      if (!canManageScope) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const admin = createAdminClient();
