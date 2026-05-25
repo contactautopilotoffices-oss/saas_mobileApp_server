@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { importId: string } }
+  { params }: { params: Promise<{ importId: string }> }
 ) {
   try {
     const auth = await getAuthenticatedUser(request);
@@ -144,7 +144,7 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { importId: string } }
+  { params }: { params: Promise<{ importId: string }> }
 ) {
   try {
     const auth = await getAuthenticatedUser(request);
