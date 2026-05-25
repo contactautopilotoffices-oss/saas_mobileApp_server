@@ -1,16 +1,14 @@
 // app/api/users/onboarding-status/route.ts
-import { NextResponse } from 'next/server';
-import { getSupabaseClient } from '@/lib/supabaseServer'; // helper to get supabase with auth
+import { NextResponse, NextRequest } from 'next/server';
+import { getAuthorizedSupabase } from '@/lib/mobileClient';
 
-export async function GET(request: Request) {
-  // Get supabase client with user session from cookies
-  const supabase = getSupabaseClient(request);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: NextRequest) {
+  const { client, user, response } = await getAuthorizedSupabase(request);
+  if (response || !client || !user) {
+    return response || NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('users')
     .select('onboarding_completed')
     .eq('id', user.id)
