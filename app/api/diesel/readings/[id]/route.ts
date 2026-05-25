@@ -9,21 +9,26 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (auth.response || !auth.user) {
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { id } = await params;
     const propertyId = request.nextUrl.searchParams.get("propertyId");
+    const { id } = await params;
     if (!propertyId) return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
     if (!(await canManageProperty(auth.user.id, propertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const admin = createAdminClient();
-    const { data: reading } = await admin.from("diesel_readings").select("*").eq("id", id).eq("property_id", propertyId).maybeSingle();
+    const { data: reading } = await admin
+      .from("diesel_readings")
+      .select("generator_id")
+      .eq("id", id)
+      .eq("property_id", propertyId)
+      .maybeSingle();
     if (!reading) return NextResponse.json({ error: "Reading not found" }, { status: 404 });
 
     const { error } = await admin.from("diesel_readings").delete().eq("id", id);
     if (error) return NextResponse.json({ error: "Failed to delete reading" }, { status: 500 });
 
-    const { data: remaining } = await admin
+    const { data: latest } = await admin
       .from("diesel_readings")
-      .select("closing_hours, closing_diesel_level")
+      .select("closing_hours, closing_diesel_level, closing_kwh")
       .eq("generator_id", reading.generator_id)
       .eq("property_id", propertyId)
       .order("reading_date", { ascending: false })
@@ -34,8 +39,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     await admin
       .from("generators")
       .update({
-        initial_run_hours: remaining?.closing_hours ?? 0,
-        initial_diesel_level: remaining?.closing_diesel_level ?? 0,
+        initial_run_hours: latest?.closing_hours ?? 0,
+        initial_diesel_level: latest?.closing_diesel_level ?? 0,
+        initial_kwh_reading: latest?.closing_kwh ?? 0,
       })
       .eq("id", reading.generator_id);
 

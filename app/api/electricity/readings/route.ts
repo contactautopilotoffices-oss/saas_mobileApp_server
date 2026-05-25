@@ -11,35 +11,82 @@ export async function POST(request: NextRequest) {
     }
     const body = await request.json();
     const propertyId = body.propertyId || body.property_id;
-    if (!propertyId || !body.meter_id || !body.reading_date) return NextResponse.json({ error: "Missing reading fields" }, { status: 400 });
-    if (!(await canManageProperty(auth.user.id, propertyId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!propertyId || !body.meter_id || !body.reading_date) {
+      return NextResponse.json({ error: "Missing reading fields" }, { status: 400 });
+    }
+    if (!(await canManageProperty(auth.user.id, propertyId))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const admin = createAdminClient();
-    const { data: multData }: any = await admin.rpc("get_active_multiplier", { p_meter_id: body.meter_id, p_date: body.reading_date });
-    const multiplierValue = multData?.[0]?.multiplier_value ?? 1;
-    const multiplierId = multData?.[0]?.id ?? null;
+
+    // 1. Look up active multiplier and tariff
+    const [{ data: multData }, { data: tariffData }] = await Promise.all([
+      admin.rpc("get_active_multiplier", { p_meter_id: body.meter_id, p_date: body.reading_date }),
+      admin.rpc("get_active_grid_tariff", { p_property_id: propertyId, p_date: body.reading_date }),
+    ]);
+
+    const multiplierValue = (multData as any)?.[0]?.multiplier_value ?? 1;
+    const multiplierId = (multData as any)?.[0]?.id ?? null;
+    const tariffRate = (tariffData as any)?.[0]?.rate_per_unit ?? 0;
+    const tariffId = (tariffData as any)?.[0]?.id ?? null;
+
+    // 2. Compute values
     const rawUnits = Number(body.closing_reading) - Number(body.opening_reading);
     const finalUnits = rawUnits * multiplierValue;
+    const computedCost = finalUnits * tariffRate;
 
-    const { data, error } = await admin
+    // 3. Check for existing reading on same date
+    const { data: existing } = await admin
       .from("electricity_readings")
-      .insert({
-        property_id: propertyId,
-        meter_id: body.meter_id,
-        reading_date: body.reading_date,
-        opening_reading: body.opening_reading,
-        closing_reading: body.closing_reading,
-        final_units: finalUnits,
-        multiplier_id: multiplierId,
-        multiplier_value_used: multiplierValue,
-        notes: body.notes ?? null,
-      })
-      .select("*")
-      .single();
-    if (error) return NextResponse.json({ error: "Failed to create electricity reading" }, { status: 500 });
+      .select("id")
+      .eq("meter_id", body.meter_id)
+      .eq("reading_date", body.reading_date)
+      .maybeSingle();
 
+    const insertPayload = {
+      property_id: propertyId,
+      meter_id: body.meter_id,
+      reading_date: body.reading_date,
+      opening_reading: body.opening_reading,
+      closing_reading: body.closing_reading,
+      computed_units: rawUnits,
+      final_units: finalUnits,
+      computed_cost: computedCost,
+      multiplier_id: multiplierId,
+      multiplier_value_used: multiplierValue,
+      tariff_rate_used: tariffRate,
+      tariff_id: tariffId,
+      notes: body.notes ?? null,
+      photo_url: body.photo_url ?? null,
+      created_by: auth.user.id,
+      alert_status: body.alert_status ?? "normal",
+    };
+
+    let result;
+    if (existing?.id) {
+      const { data, error } = await admin
+        .from("electricity_readings")
+        .update(insertPayload)
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+      if (error) return NextResponse.json({ error: "Failed to update electricity reading" }, { status: 500 });
+      result = data;
+    } else {
+      const { data, error } = await admin
+        .from("electricity_readings")
+        .insert(insertPayload)
+        .select("*")
+        .single();
+      if (error) return NextResponse.json({ error: "Failed to create electricity reading" }, { status: 500 });
+      result = data;
+    }
+
+    // 4. Update meter last_reading
     await admin.from("electricity_meters").update({ last_reading: body.closing_reading }).eq("id", body.meter_id);
-    return NextResponse.json({ success: true, reading: data }, { status: 201 });
+
+    return NextResponse.json({ success: true, reading: result }, { status: existing?.id ? 200 : 201 });
   } catch (error) {
     console.error("[saas-mobile-server] electricity readings POST error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
