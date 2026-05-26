@@ -49,16 +49,15 @@ export async function DELETE(request: NextRequest) {
     if (auth.response || !auth.user) {
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const body = await request.json();
-    const type = String(body.type || "photo");
-    const url = String(body.url || "");
+    const urlParam = request.nextUrl.searchParams.get("url") || "";
+    const type = request.nextUrl.searchParams.get("type") || "photo";
     const bucket = bucketForType(type);
     const marker = `/${bucket}/`;
-    const index = url.indexOf(marker);
-    if (!url || index === -1) {
+    const index = urlParam.indexOf(marker);
+    if (!urlParam || index === -1) {
       return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
     }
-    const filePath = url.slice(index + marker.length);
+    const filePath = urlParam.slice(index + marker.length);
     const admin = createAdminClient();
     const { error } = await admin.storage.from(bucket).remove([filePath]);
     if (error) return NextResponse.json({ error: "Failed to delete media" }, { status: 500 });
