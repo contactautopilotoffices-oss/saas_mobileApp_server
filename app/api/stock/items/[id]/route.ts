@@ -46,18 +46,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const body = await request.json();
-    const payload = {
-      name: body.name,
-      item_code: body.item_code,
-      description: body.description,
-      category: body.category,
-      quantity: body.quantity,
-      unit: body.unit,
-      min_threshold: body.min_threshold,
-      unit_price: body.unit_price,
-      location: body.location,
-      barcode: body.barcode,
+    const payload: any = {
+      updated_at: new Date().toISOString(),
     };
+    if (body.name !== undefined) payload.name = body.name;
+    if (body.item_code !== undefined) payload.item_code = body.item_code;
+    if (body.description !== undefined) payload.description = body.description;
+    if (body.category !== undefined) payload.category = body.category;
+    if (body.quantity !== undefined) payload.quantity = body.quantity;
+    if (body.unit !== undefined) payload.unit = body.unit;
+    if (body.min_threshold !== undefined) payload.min_threshold = body.min_threshold;
+    if (body.per_unit_cost !== undefined) payload.per_unit_cost = body.per_unit_cost;
+    if (body.location !== undefined) payload.location = body.location;
+    if (body.barcode !== undefined) payload.barcode = body.barcode;
 
     const admin = createAdminClient();
     const { data, error } = await admin.from("stock_items").update(payload).eq("id", id).select("*").single();
