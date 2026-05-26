@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const [{ data: templates, error }, { data: members }, { data: property }] = await Promise.all([
       admin
         .from("sop_templates")
-        .select("*, items:sop_checklist_items(*), completions:sop_completions(*, user:users(id, full_name))")
+        .select("*, items:sop_checklist_items(*), completions:sop_completions(*, user:users(id, full_name), items:sop_completion_items(*, checked_by_user:users(full_name)))")
         .eq("property_id", propertyId)
         .eq("is_active", true)
         .order("created_at", { ascending: false }),

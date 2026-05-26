@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("sop_completions")
-      .select("*, user:users(id, full_name)")
+      .select("*, user:users(id, full_name), items:sop_completion_items(*, checked_by_user:users(full_name)))")
       .eq("template_id", templateId)
       .eq("property_id", propertyId)
       .order("completed_at", { ascending: false })

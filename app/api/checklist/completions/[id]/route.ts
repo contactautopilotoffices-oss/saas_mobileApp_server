@@ -17,7 +17,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!access.authorized) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (existing.completed_by && existing.completed_by !== auth.user.id) {
+    // Allow admins to edit any completion; staff can only edit their own
+    const canAdmin = access.role && ["property_admin", "org_admin", "org_super_admin", "master_admin"].includes(access.role);
+    if (existing.completed_by && existing.completed_by !== auth.user.id && !canAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -50,6 +52,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (body.item.video_url !== undefined) itemUpdate.video_url = body.item.video_url;
       if (body.item.checked_at !== undefined) itemUpdate.checked_at = body.item.checked_at;
       if (body.item.checked_by !== undefined) itemUpdate.checked_by = body.item.checked_by;
+      if (body.item.admin_rating !== undefined) itemUpdate.admin_rating = body.item.admin_rating;
 
       if (Object.keys(itemUpdate).length > 0) {
         const { error: itemError } = await admin
