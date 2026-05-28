@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
         .eq('property_id', propertyId)
         .eq('user_id', userId)
         .maybeSingle(),
-      admin.rpc("get_ppm_stats", { prop_id: propertyId }).catch(() => ({ data: null }))
+      (async () => { try { return await admin.rpc("get_ppm_stats", { prop_id: propertyId }); } catch { return { data: null }; } })()
     ]);
 
     const dashboardData = {

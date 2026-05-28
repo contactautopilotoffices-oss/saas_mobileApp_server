@@ -8,6 +8,7 @@ export async function POST(request: NextRequest) {
     if (auth.response || !auth.user) {
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const userId = auth.user.id;
 
     const body = await request.json();
     const { 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     const { error: memErr } = await admin
       .from('property_memberships')
       .insert({
-        user_id: auth.user.id,
+        user_id: userId,
         organization_id: targetOrgId,
         property_id: finalPropId,
         role: finalRole,
@@ -80,14 +81,14 @@ export async function POST(request: NextRequest) {
       const { data: dbUserRes } = await admin
         .from('users')
         .select('full_name')
-        .eq('id', auth.user.id)
+        .eq('id', userId)
         .maybeSingle();
       
       const vendorName = dbUserRes?.full_name || userName;
       await admin
         .from('vendors')
         .insert({
-          user_id: auth.user.id,
+          user_id: userId,
           property_id: finalPropId,
           shop_name: `${userName}'s Shop`,
           vendor_name: vendorName,
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // MST skills
     if (skills && skills.length > 0) {
-      const skillsToInsert = skills.map((code: string) => ({ user_id: auth.user.id, skill_code: code }));
+      const skillsToInsert = skills.map((code: string) => ({ user_id: userId, skill_code: code }));
       await admin.from('mst_skills').insert(skillsToInsert);
 
       // Resolver stats
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
 
         if (sgRes && sgRes.length > 0) {
           const stats = sgRes.map(sg => ({
-            user_id: auth.user.id,
+            user_id: userId,
             property_id: finalPropId,
             skill_group_id: sg.id,
             current_floor: 1,
@@ -134,9 +135,9 @@ export async function POST(request: NextRequest) {
     // Upsert user profile
     const cleanPhone = phone?.trim() || "";
     const profileUpsert: any = {
-      id: auth.user.id,
+      id: userId,
       email: auth.user.email ?? '',
-      full_name: auth.user.user_metadata?.full_name ?? userName,
+      full_name: userName,
       onboarding_completed: true
     };
     if (cleanPhone.length >= 10) profileUpsert.phone = cleanPhone;

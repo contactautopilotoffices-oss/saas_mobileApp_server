@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedUser } from "@/lib/auth";
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
+    const params = await props.params;
     const auth = await getAuthenticatedUser(request);
     if (auth.response || !auth.user) {
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,8 +34,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
+    const params = await props.params;
     const auth = await getAuthenticatedUser(request);
     if (auth.response || !auth.user) {
       return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
