@@ -11,11 +11,22 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const propertyId = searchParams.get("propertyId");
-    const orgId = searchParams.get("orgId");
+    let propertyId = searchParams.get("propertyId");
+    let orgId = searchParams.get("orgId");
+    const admin = createAdminClient();
     
     if (!propertyId && !orgId) {
-      return NextResponse.json({ error: "Missing propertyId or orgId" }, { status: 400 });
+      const { data: mem } = await admin
+        .from("organization_memberships")
+        .select("organization_id")
+        .eq("user_id", auth.user.id)
+        .eq("is_active", true)
+        .single();
+      if (mem) {
+        orgId = mem.organization_id;
+      } else {
+        return NextResponse.json({ error: "Missing propertyId or orgId, and no default org found" }, { status: 400 });
+      }
     }
 
     if (propertyId) {
@@ -30,7 +41,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const admin = createAdminClient();
     let propertyIds: string[] = [];
 
     if (propertyId) {

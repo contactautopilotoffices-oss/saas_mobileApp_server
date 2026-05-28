@@ -3,6 +3,7 @@ import { createAnonClient } from "@/lib/supabase/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { classifyTicketEnhanced, logClassification, resolveClassification } from "@/lib/ticketing";
+import { deleteCache } from "@/lib/cache";
 
 function extractFloorNumber(description: string): number | null {
   const lowerDesc = description.toLowerCase();
@@ -75,7 +76,8 @@ export async function GET(request: NextRequest) {
       skill_group:skill_groups(id, code, name),
       creator:users!raised_by(id, full_name, email, user_photo_url),
       assignee:users!assigned_to(id, full_name, email, user_photo_url),
-      property:properties(id, name, code)
+      property:properties(id, name, code),
+      ticket_escalation_logs(from_level, to_level, escalated_at, from_employee:users!from_employee_id(full_name, user_photo_url), to_employee:users!to_employee_id(full_name, user_photo_url))
       `,
       { count: "exact" }
     )
@@ -219,6 +221,9 @@ export async function POST(request: NextRequest) {
   }
 
   await logClassification(ticket.id, resolution);
+  
+  // Invalidate cache for dashboard
+  await deleteCache(`dashboard:${propertyId}:${auth.user.id}`);
 
   return NextResponse.json(
     {
@@ -238,4 +243,32 @@ export async function POST(request: NextRequest) {
     },
     { status: 201 }
   );
+}
+
+export async function PATCH(request: NextRequest) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.response || !auth.user || !auth.token) {
+    return auth.response ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = createAnonClient(auth.token);
+  const body = await request.json();
+  const ticketIds = body.ticketIds;
+  const assignedTo = body.assignedTo;
+
+  if (!ticketIds || !Array.isArray(ticketIds) || ticketIds.length === 0 || !assignedTo) {
+    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("tickets")
+    .update({ assigned_to: assignedTo, updated_at: new Date().toISOString() })
+    .in("id", ticketIds);
+
+  if (error) {
+    console.error("[saas-mobile-server] ticket bulk update error:", error);
+    return NextResponse.json({ error: "Failed to bulk update tickets" }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true }, { status: 200 });
 }
