@@ -25,13 +25,6 @@ export async function GET(request: NextRequest) {
     
     if (organizationId) scheduleQuery = scheduleQuery.eq("organization_id", organizationId);
     
-    const { data: schedules, error: schedulesError } = await scheduleQuery.order("planned_date", { ascending: true });
-
-    if (schedulesError) {
-      console.error("[saas-mobile-server] ppm GET schedules error:", schedulesError);
-      return NextResponse.json({ error: schedulesError.message, details: schedulesError.details, hint: schedulesError.hint }, { status: 500 });
-    }
-
     // Fetch AMC contracts
     let contractQuery = admin
       .from("amc_contracts")
@@ -40,12 +33,23 @@ export async function GET(request: NextRequest) {
     
     if (organizationId) contractQuery = contractQuery.eq("organization_id", organizationId);
     
-    const { data: contracts, error: contractsError } = await contractQuery.order("contract_end_date", { ascending: true });
+    const [schedulesResult, contractsResult] = await Promise.all([
+      scheduleQuery.order("planned_date", { ascending: true }),
+      contractQuery.order("contract_end_date", { ascending: true })
+    ]);
 
-    if (contractsError) {
-      console.error("[saas-mobile-server] ppm GET contracts error:", contractsError);
-      return NextResponse.json({ error: contractsError.message, details: contractsError.details, hint: contractsError.hint }, { status: 500 });
+    if (schedulesResult.error) {
+      console.error("[saas-mobile-server] ppm GET schedules error:", schedulesResult.error);
+      return NextResponse.json({ error: schedulesResult.error.message, details: schedulesResult.error.details, hint: schedulesResult.error.hint }, { status: 500 });
     }
+
+    if (contractsResult.error) {
+      console.error("[saas-mobile-server] ppm GET contracts error:", contractsResult.error);
+      return NextResponse.json({ error: contractsResult.error.message, details: contractsResult.error.details, hint: contractsResult.error.hint }, { status: 500 });
+    }
+
+    const schedules = schedulesResult.data;
+    const contracts = contractsResult.data;
 
     return NextResponse.json({ schedules: schedules ?? [], contracts: contracts ?? [] });
   } catch (error) {

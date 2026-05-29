@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
         
       // Recent Tickets
       admin.from('tickets')
-        .select('id, title, status, priority, created_at, internal, photo_before_url')
+        .select('id, title, status, priority, created_at, is_internal, photo_before_url')
         .in('property_id', propIds)
         .order('created_at', { ascending: false })
         .limit(100),
