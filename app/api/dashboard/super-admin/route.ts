@@ -20,33 +20,47 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // 1. Resolve Org ID
-    const { data: orgMembership } = await admin
-      .from('organization_memberships')
-      .select('organization_id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .in('role', ['org_super_admin', 'org_admin', 'owner', 'super_tenant'])
-      .limit(1)
-      .maybeSingle();
-
-    const resolvedOrgId = orgMembership?.organization_id;
+    const url = new URL(request.url);
+    const urlOrgId = url.searchParams.get("orgId");
+    
+    let resolvedOrgId = urlOrgId;
 
     if (!resolvedOrgId) {
-      return NextResponse.json({ success: true, data: { organizations: [], properties: [], users: [] }, source: "db" });
+      // 1. Resolve Org ID
+      const { data: orgMembership } = await admin
+        .from('organization_memberships')
+        .select('organization_id')
+        .eq('user_id', userId)
+        .or('is_active.eq.true,is_active.is.null')
+        .in('role', ['org_super_admin', 'org_admin', 'owner', 'super_tenant'])
+        .limit(1)
+        .maybeSingle();
+      
+      resolvedOrgId = orgMembership?.organization_id;
     }
 
     // 2. Fetch Organizations
-    const { data: orgs } = await admin
+    let orgQuery = admin
       .from('organizations')
       .select('*, properties(count)')
       .order('created_at', { ascending: false });
+      
+    if (resolvedOrgId) {
+      orgQuery = orgQuery.eq('id', resolvedOrgId);
+    }
+    
+    const { data: orgs } = await orgQuery;
 
-    // 3. Fetch Properties for this org
-    const { data: propData } = await admin
+    // 3. Fetch Properties
+    let propQuery = admin
       .from('properties')
-      .select('id, name, code, address, image_url, organization_id')
-      .eq('organization_id', resolvedOrgId);
+      .select('id, name, code, address, image_url, organization_id');
+      
+    if (resolvedOrgId) {
+      propQuery = propQuery.eq('organization_id', resolvedOrgId);
+    }
+    
+    const { data: propData } = await propQuery;
 
     const propertiesList = propData ?? [];
     if (propertiesList.length === 0) {

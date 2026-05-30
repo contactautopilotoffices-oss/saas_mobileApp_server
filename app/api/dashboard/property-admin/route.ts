@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { getCache, setCache, CACHE_TTL } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -38,9 +38,10 @@ export async function GET(request: NextRequest) {
         .from('organization_memberships')
         .select('organization_id')
         .eq('user_id', userId)
-        .eq('is_active', true)
+        .or('is_active.eq.true,is_active.is.null')
+        .in('role', ['org_super_admin', 'org_admin', 'owner', 'super_tenant'])
         .limit(1)
-        .single();
+        .maybeSingle();
         
       if (orgMembership?.organization_id) {
         const { data: props } = await admin
@@ -48,8 +49,14 @@ export async function GET(request: NextRequest) {
           .select('id')
           .eq('organization_id', orgMembership.organization_id);
         propIds = (props ?? []).map((p: any) => p.id);
+      } else {
+        return NextResponse.json({ error: "Unauthorized access to org properties" }, { status: 403 });
       }
     } else {
+      const access = await getPropertyAccess(userId, propertyId);
+      if (!access.authorized) {
+        return NextResponse.json({ error: "Access Denied to this Property" }, { status: 403 });
+      }
       propIds = [propertyId];
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
 import { getCache, setCache, CACHE_TTL } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -18,6 +18,12 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = auth.user.id;
+    
+    const access = await getPropertyAccess(userId, propertyId);
+    if (!access.authorized) {
+      return NextResponse.json({ error: "Access Denied to this Property" }, { status: 403 });
+    }
+
     const cacheKey = `dashboard:soft-services:${propertyId}:${userId}`;
 
     const cachedData = await getCache(cacheKey);
