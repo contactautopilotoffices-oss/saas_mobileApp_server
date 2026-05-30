@@ -37,6 +37,10 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const organizationId = searchParams.get("organizationId");
     const propertyId = searchParams.get("propertyId");
+
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+    }
     const ticketId = searchParams.get("ticketId");
     const approverId = searchParams.get("approverId");
     const floorNumber = searchParams.get("floorNumber") ?? searchParams.get("floor_number") ?? searchParams.get("floor");

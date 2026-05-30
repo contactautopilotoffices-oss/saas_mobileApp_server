@@ -11,6 +11,10 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const propertyId = searchParams.get("propertyId");
+
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+    }
     const date = searchParams.get("date");
     const capacity = parseInt(searchParams.get("capacity") || "0", 10);
     const startTime = searchParams.get("startTime");

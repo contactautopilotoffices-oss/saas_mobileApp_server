@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
 
-    if (!propertyId) {
-      return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
     }
 
     const access = await getPropertyAccess(auth.user.id, propertyId);

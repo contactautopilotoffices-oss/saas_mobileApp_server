@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     const propertyId = searchParams.get("propertyId");
     const term = searchParams.get("q");
 
-    if (!propertyId) {
-      return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
     }
     if (!term) {
       return NextResponse.json({ success: true, schedules: [] });

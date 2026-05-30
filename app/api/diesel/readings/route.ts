@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
+
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+    }
     const generatorId = searchParams.get("generatorId");
     const fromDate = searchParams.get("fromDate");
     const toDate = searchParams.get("toDate");

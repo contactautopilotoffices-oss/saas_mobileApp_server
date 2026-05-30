@@ -11,6 +11,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const propertyId = searchParams.get("propertyId");
+
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+    }
     const month = searchParams.get("month"); // YYYY-MM format
     const startDateParam = searchParams.get("startDate"); // YYYY-MM-DD
     const endDateParam = searchParams.get("endDate");     // YYYY-MM-DD

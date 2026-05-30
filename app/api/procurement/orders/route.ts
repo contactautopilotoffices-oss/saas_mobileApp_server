@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
     const materialRequestId = searchParams.get("materialRequestId");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
 
-    if (!propertyId) {
-      return NextResponse.json({ error: "propertyId is required" }, { status: 400 });
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
     }
 
     const access = await getPropertyAccess(auth.user.id, propertyId);

@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
     const orgId = searchParams.get("orgId") ?? searchParams.get("organizationId");
     const propertyId = searchParams.get("propertyId");
 
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+    }
+
     if (!orgId && !propertyId) {
       return NextResponse.json({ error: "Missing required parameter: orgId or propertyId" }, { status: 400 });
     }

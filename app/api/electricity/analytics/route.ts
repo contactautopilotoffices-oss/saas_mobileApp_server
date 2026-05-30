@@ -15,8 +15,9 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
 
-    if (!propertyId) return NextResponse.json({ error: "Missing propertyId parameter" }, { status: 400 });
-
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+    }
     const access = await getPropertyAccess(auth.user.id, propertyId);
     if (!access.authorized) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 

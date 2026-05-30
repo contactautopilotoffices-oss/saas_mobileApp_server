@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
     const orgId = searchParams.get("orgId");
     const propertyId = searchParams.get("propertyId");
 
+    if (!propertyId || propertyId === 'undefined' || propertyId === 'null') {
+      return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
+    }
+
     const cacheKey = `tickets:stats:${orgId ?? 'none'}:${propertyId ?? 'none'}`;
     const cachedData = await getCache(cacheKey);
 
