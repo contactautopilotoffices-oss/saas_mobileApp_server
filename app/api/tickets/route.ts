@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       resolved_at, property_id, organization_id, photo_before_url, photo_after_url,
       category:issue_categories(id, code, name),
       skill_group:skill_groups(id, code, name),
-      creator:users!raised_by(id, full_name, email, user_photo_url),
+      creator:users!raised_by(id, full_name, email, user_photo_url, property_memberships(role, property_id)),
       assignee:users!assigned_to(id, full_name, email, user_photo_url),
       property:properties(id, name, code),
       ticket_escalation_logs(from_level, to_level, escalated_at, from_employee:users!from_employee_id(full_name, user_photo_url), to_employee:users!to_employee_id(full_name, user_photo_url))
