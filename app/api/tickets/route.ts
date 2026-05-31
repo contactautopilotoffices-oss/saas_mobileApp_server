@@ -65,6 +65,13 @@ export async function GET(request: NextRequest) {
   const raisedBy = searchParams.get("raisedBy") || searchParams.get("raised_by");
   const limitParam = searchParams.get("limit");
   const offsetParam = searchParams.get("offset");
+  const internalOnly = searchParams.get("internalOnly") === "true";
+  const materialsRequired = searchParams.get("materialsRequired") === "true";
+  const slaBreached = searchParams.get("slaBreached");
+  const dateFrom = searchParams.get("dateFrom");
+  const dateTo = searchParams.get("dateTo");
+  const search = searchParams.get("search");
+  const raisedByRole = searchParams.get("raisedByRole");
 
   let query = supabase
     .from("tickets")
@@ -92,6 +99,63 @@ export async function GET(request: NextRequest) {
   if (status) query = status.includes(",") ? query.in("status", status.split(",").map((value) => value.trim())) : query.eq("status", status);
   if (assignedTo) query = query.eq("assigned_to", assignedTo);
   if (raisedBy) query = query.eq("raised_by", raisedBy);
+  if (internalOnly) query = query.eq("internal", true);
+  
+  if (slaBreached === 'true') {
+    query = query
+      .or(`sla_deadline.lt.${new Date().toISOString()},sla_breached.eq.true`)
+      .not('status', 'in', '("resolved","closed")');
+  } else if (slaBreached === 'false') {
+    query = query.or(`sla_deadline.gte.${new Date().toISOString()},sla_deadline.is.null,status.in.("resolved","closed")`);
+  }
+
+  if (dateFrom) {
+    const fromStr = dateFrom.includes('T') ? dateFrom : `${dateFrom}T00:00:00+05:30`;
+    query = query.gte('created_at', fromStr);
+  }
+  if (dateTo) {
+    const toStr = dateTo.includes('T') ? dateTo : `${dateTo}T23:59:59+05:30`;
+    query = query.lte('created_at', toStr);
+  }
+
+  if (search) {
+    query = query.or(`ticket_number.ilike.%${search}%,title.ilike.%${search}%`);
+  }
+
+  if (raisedByRole) {
+    let membershipQuery;
+    if (propertyId) {
+      membershipQuery = supabase
+        .from('property_memberships')
+        .select('user_id')
+        .eq('property_id', propertyId)
+        .eq('role', raisedByRole)
+        .eq('is_active', true);
+    } else if (organizationId) {
+      membershipQuery = supabase
+        .from('property_memberships')
+        .select('user_id, properties!inner(organization_id)')
+        .eq('properties.organization_id', organizationId)
+        .eq('role', raisedByRole)
+        .eq('is_active', true);
+    } else {
+      membershipQuery = supabase
+        .from('property_memberships')
+        .select('user_id')
+        .eq('role', raisedByRole)
+        .eq('is_active', true);
+    }
+
+    const { data: members, error: memberError } = await membershipQuery;
+    if (memberError) {
+      console.error('[saas-mobile-server] Error fetching members by role:', memberError);
+    } else if (members && members.length > 0) {
+      const userIds = [...new Set(members.map((m: any) => m.user_id))];
+      query = query.in('raised_by', userIds);
+    } else {
+      return NextResponse.json({ tickets: [], total: 0 });
+    }
+  }
 
   const { data, error, count } = await query;
   if (error) {
