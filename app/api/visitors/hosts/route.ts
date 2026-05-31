@@ -18,12 +18,12 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     let hostQuery = admin
       .from("property_memberships")
-      .select("user_id, users:user_id(id, full_name, email)")
+      .select("user_id, user:users(id, full_name, email)")
       .eq("property_id", propertyId)
       .eq("is_active", true)
       .limit(5);
     if (query.length >= 2) {
-      hostQuery = hostQuery.ilike("users.full_name", `%${query}%`);
+      hostQuery = hostQuery.ilike("user.full_name", `%${query}%`);
     }
 
     const { data, error } = await hostQuery;
@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
     const hosts = (data ?? [])
       .map((row: any) => ({
         id: row.user_id,
-        full_name: row.users?.full_name ?? "Unknown",
-        email: row.users?.email ?? "",
+        full_name: row.user?.full_name ?? "Unknown",
+        email: row.user?.email ?? "",
       }))
       .filter((row: any) => row.id);
 
