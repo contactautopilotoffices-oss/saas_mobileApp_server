@@ -68,7 +68,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .maybeSingle();
 
     if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
-    if (ticket.raised_by !== auth.user.id && ticket.assigned_to !== auth.user.id) {
+    const access = await getPropertyAccess(auth.user.id, ticket.property_id);
+    if (!access.authorized) {
       return NextResponse.json({ error: "Not authorized to upload videos for this ticket" }, { status: 403 });
     }
 
@@ -136,7 +137,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       .maybeSingle();
 
     if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
-    if (ticket.raised_by !== auth.user.id && ticket.assigned_to !== auth.user.id) {
+    const access = await getPropertyAccess(auth.user.id, ticket.property_id);
+    if (!access.authorized) {
       return NextResponse.json({ error: "Not authorized to delete videos for this ticket" }, { status: 403 });
     }
 
