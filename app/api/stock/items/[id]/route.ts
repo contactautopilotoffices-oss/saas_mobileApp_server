@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
-import { canManageProperty } from "@/lib/authorization";
+import { canManageStock } from "@/lib/authorization";
 
 async function resolvePropertyId(itemId: string) {
   const admin = createAdminClient();
@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     const propertyId = (await resolvePropertyId(id)) ?? request.nextUrl.searchParams.get("propertyId");
     if (!propertyId) return NextResponse.json({ error: "Property not found" }, { status: 404 });
-    if (!(await canManageProperty(auth.user.id, propertyId))) {
+    if (!(await canManageStock(auth.user.id, propertyId))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -79,7 +79,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id } = await params;
     const propertyId = (await resolvePropertyId(id)) ?? request.nextUrl.searchParams.get("propertyId");
     if (!propertyId) return NextResponse.json({ error: "Property not found" }, { status: 404 });
-    if (!(await canManageProperty(auth.user.id, propertyId))) {
+    if (!(await canManageStock(auth.user.id, propertyId))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

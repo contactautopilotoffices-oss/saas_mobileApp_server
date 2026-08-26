@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedUser, getPropertyAccess } from "@/lib/auth";
-import { canManageProperty } from "@/lib/authorization";
+import { canManageStock } from "@/lib/authorization";
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     if (!propertyId || !body.name) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    if (!(await canManageProperty(auth.user.id, propertyId))) {
+    if (!(await canManageStock(auth.user.id, propertyId))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -200,7 +200,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    if (!(await canManageProperty(auth.user.id, propertyId))) {
+    if (!(await canManageStock(auth.user.id, propertyId))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
