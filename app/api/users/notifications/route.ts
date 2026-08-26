@@ -95,6 +95,24 @@ export async function GET(request: NextRequest) {
          }
          return { ...n, photo_url };
       });
+
+      // Filter out operational checklist/SOP notifications for tenants
+      const roleParam = (searchParams.get("role") || "").toLowerCase();
+      if (roleParam === "tenant") {
+        enrichedData = enrichedData.filter((n: any) => {
+          const typeStr = String(n.type || n.notification_type || n.entity_type || "").toLowerCase();
+          const titleStr = String(n.title || "").toLowerCase();
+          const bodyStr = String(n.body || n.message || "").toLowerCase();
+          return !(
+            typeStr.includes("checklist") ||
+            typeStr.includes("sop") ||
+            titleStr.includes("checklist") ||
+            titleStr.includes("sop") ||
+            bodyStr.includes("checklist") ||
+            bodyStr.includes("sop")
+          );
+        });
+      }
     }
 
     return NextResponse.json({ success: true, data: enrichedData });

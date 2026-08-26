@@ -57,7 +57,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!["before", "after"].includes(videoType)) {
       return NextResponse.json({ error: 'Invalid video type. Use "before" or "after"' }, { status: 400 });
     }
-    if (!file.type.startsWith("video/")) return NextResponse.json({ error: "File must be a video" }, { status: 400 });
+
+    const isVideoMime = Boolean(file.type && file.type.startsWith("video/"));
+    const isVideoExt = Boolean(file.name && /\.(mp4|mov|m4v|webm|3gp|quicktime|mkv)$/i.test(file.name));
+    if (!isVideoMime && !isVideoExt) {
+      return NextResponse.json({ error: "File must be a video (.mp4, .mov, etc.)" }, { status: 400 });
+    }
     if (file.size > 50 * 1024 * 1024) return NextResponse.json({ error: "Video must be under 50MB" }, { status: 400 });
 
     const admin = createAdminClient();
@@ -73,12 +78,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Not authorized to upload videos for this ticket" }, { status: 403 });
     }
 
-    const fileExt = file.name.split(".").pop() || "mp4";
+    const fileExt = file.name ? (file.name.split(".").pop() || "mp4") : "mp4";
     const fileName = `${id}/${videoType}_${Date.now()}.${fileExt}`;
     const supabase = createAnonClient(auth.token);
 
+    const contentType = isVideoMime ? file.type : (fileExt.toLowerCase() === 'mov' ? 'video/quicktime' : 'video/mp4');
     const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file, {
       cacheControl: "3600",
+      contentType,
       upsert: true
     });
 
