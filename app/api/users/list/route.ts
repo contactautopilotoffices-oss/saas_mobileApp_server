@@ -39,17 +39,35 @@ export async function GET(request: NextRequest) {
           is_active,
           created_at,
           property:properties(id, name),
-          user:users(id, full_name, email, user_photo_url, phone)
+          user:users(id, full_name, email, user_photo_url, phone, is_approved, approval_status, approved_by, approved_at, rejection_reason, deleted_at)
           `
         )
-        .eq("property_id", propertyId)
-        .eq("is_active", true);
+        .eq("property_id", propertyId);
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      const users = ((data ?? []) as any[])
+      const visible = ((data ?? []) as any[]).filter((item: any) => {
+        if (!item.user || item.user.deleted_at) return false;
+        if (item.is_active === true) return true;
+        const isPending = (item.user.is_approved === false || item.user.approval_status === "pending") && item.user.approval_status !== "rejected";
+        return isPending || item.user.approval_status === "rejected";
+      });
+
+      const approverIds = Array.from(new Set(visible.map((m: any) => m.user?.approved_by).filter(Boolean)));
+      const approverMap = new Map<string, string>();
+      if (approverIds.length > 0) {
+        const { data: approvers } = await admin
+          .from("users")
+          .select("id, full_name")
+          .in("id", approverIds);
+        (approvers || []).forEach((a: any) => {
+          if (a.id && a.full_name) approverMap.set(a.id, a.full_name);
+        });
+      }
+
+      const users = visible
         .map((item: any) => ({
           id: item.user?.id,
           full_name: item.user?.full_name,
@@ -60,7 +78,13 @@ export async function GET(request: NextRequest) {
           propertyId: item.property?.id,
           is_active: item.is_active,
           joined_at: item.created_at,
-          phone: item.user?.phone
+          phone: item.user?.phone,
+          is_approved: item.user?.is_approved ?? (item.is_active ? true : false),
+          approval_status: item.user?.approval_status || (item.user?.is_approved === false ? "pending" : "approved"),
+          approved_by: item.user?.approved_by || null,
+          approved_at: item.user?.approved_at || null,
+          rejection_reason: item.user?.rejection_reason || null,
+          approverName: item.user?.approved_by ? (approverMap.get(item.user.approved_by) || "Administrator") : null,
         }))
         .filter((user) => !!user.id)
         .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || ""));
